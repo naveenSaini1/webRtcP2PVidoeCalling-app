@@ -16,7 +16,7 @@ function MainContextApiProvider({ children }) {
     const [iceCandidateState, setIceCandidateState] = useState();
     const [senderState, setSenderState] = useState();
 
-    async function handlePeearConnecton(peerConnection) {
+    async function handlePeearConnecton(peerConnection, stomp) {
 
         let stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
 
@@ -27,18 +27,7 @@ function MainContextApiProvider({ children }) {
         console.log("tracksss", track)
         peerConnection.addTrack(track[0], stream)
 
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                setIceCandidateState(event.candidate);
-                console.log("ice candidate event");
-                //     let iceCandidateObject = {
-                //         userName: userName,
-                //         type: "iceCandidate",
-                //         data: event.candidate,
-                //     };
-                //     stomp.send("/app/sendInfo", {}, JSON.stringify(iceCandidateObject));
-            }
-        };
+
 
         peerConnection.ontrack = (event) => {
             const [remoteStream] = event.streams;
@@ -60,7 +49,7 @@ function MainContextApiProvider({ children }) {
             });
             const configuration = { "iceServers": [{ "url": "stun:stun.l.google.com:19302" }] };
             const peerConnection = new RTCPeerConnection(configuration);
-            handlePeearConnecton(peerConnection);
+            handlePeearConnecton(peerConnection, stomp);
             setPeerConnectionState(peerConnection);
 
         }
@@ -78,7 +67,18 @@ function MainContextApiProvider({ children }) {
                             peerConnectionState.setRemoteDescription(new RTCSessionDescription(res.data));
                             const answer = await peerConnectionState.createAnswer();
                             await peerConnectionState.setLocalDescription(answer);
-                            setSenderState(res.senderName);
+                            
+                            peerConnectionState.onicecandidate = (event) => {
+                                if (event.candidate) {
+                                    console.log("ice candidate event answer====================================================", event.candidate);
+                                    let iceCandidateObject = {
+                                        userName: res.senderName,
+                                        type: "iceCandidate",
+                                        data: event.candidate,
+                                    };
+                                    singling.send("/app/sendInfo", {}, JSON.stringify(iceCandidateObject));
+                                }
+                            };
                             let object = {
                                 userName: res.senderName,
                                 senderName: userName,
@@ -92,15 +92,10 @@ function MainContextApiProvider({ children }) {
                         }
                     case "answer":
                         {
+                           
                             const remoteDesc = new RTCSessionDescription(res.data);
                             await peerConnectionState.setRemoteDescription(remoteDesc);
                             console.log("answer", res);
-                            let iceCandidateObject = {
-                                userName: senderState,
-                                type: "iceCandidate",
-                                data: iceCandidateState
-                            };
-                            singling.send("/app/sendInfo", {}, JSON.stringify(iceCandidateObject));
 
 
                             break;
@@ -134,22 +129,32 @@ function MainContextApiProvider({ children }) {
         setUserName(userName);
     }
 
-    useEffect(() => {
-        if (senderState != null) {
-            console.log("andled ice candidate================== ", senderState);
+    // useEffect(() => {
+    //     if (senderState != null) {
+    //         console.log("andled ice candidate================== ", senderState);
 
-            let iceCandidateObject = {
-                userName: senderState,
-                type: "iceCandidate",
-                data: iceCandidateState
-            };
-            singling.send("/app/sendInfo", {}, JSON.stringify(iceCandidateObject));
+    //         let iceCandidateObject = {
+    //             userName: senderState,
+    //             type: "iceCandidate",
+    //             data: iceCandidateState
+    //         };
+    //         singling.send("/app/sendInfo", {}, JSON.stringify(iceCandidateObject));
 
-        }
-    }, [senderState])
+    //     }
+    // }, [senderState])
 
     const handleCall = async (userNames) => {
-        setSenderState(userNames);
+        peerConnectionState.onicecandidate = (event) => {
+            if (event.candidate) {
+                console.log("ice candidate event====================================================", event.candidate);
+                let iceCandidateObject = {
+                    userName: userNames,
+                    type: "iceCandidate",
+                    data: event.candidate,
+                };
+                singling.send("/app/sendInfo", {}, JSON.stringify(iceCandidateObject));
+            }
+        };
         console.log("peeeeeeeeeeeeeeeee", peerConnectionState);
         let peerConnectionLocal = peerConnectionState;
         try {
